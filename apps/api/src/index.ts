@@ -4,6 +4,7 @@ import rootPlugin from './plugins/root.js';
 import dbPlugin from './plugins/db.js';
 import storagePlugin from './plugins/storage.js';
 import multipartPlugin from './plugins/multipart.js';
+import queuePlugin from './plugins/queue.js';
 import healthRoutes from './routes/health.js';
 import v1Routes from './routes/v1/index.js';
 
@@ -36,6 +37,7 @@ async function bootstrap() {
   await app.register(dbPlugin);
   await app.register(storagePlugin);
   await app.register(multipartPlugin);
+  await app.register(queuePlugin);
 
   // ── Routes ────────────────────────────────────────────────────────────────
   await app.register(healthRoutes);

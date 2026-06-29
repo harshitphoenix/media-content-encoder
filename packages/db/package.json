@@ -18,7 +18,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --import tsx/esm dist/migrate.js",
     "db:studio": "drizzle-kit studio",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

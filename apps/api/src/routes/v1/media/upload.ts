@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import type { FastifyPluginAsync } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { mediaAssets, imageMetadata, videoMetadata, processingJobs } from '@mce/db';
 import { isImageMimeType, JOB_TYPE } from '@mce/shared';
 import { originalKey } from '@mce/storage';
@@ -129,7 +130,31 @@ const uploadRoute: FastifyPluginAsync = async (app) => {
           return { asset: insertedAsset, job: insertedJob };
         });
 
-        // ── 6. Respond ─────────────────────────────────────────────────────
+        // ── 6. Enqueue job (best-effort — Redis failure doesn't abort upload) ─
+        const jobEnvelope = { jobId: job.id, assetId, storageKey, mimeType };
+        const queueOpts = {
+          jobId: job.id, // idempotency: BullMQ deduplicates on waiting/active/delayed
+          attempts: req.server.config.JOB_MAX_ATTEMPTS,
+          backoff: { type: 'exponential' as const, delay: req.server.config.JOB_BACKOFF_BASE_MS },
+          removeOnComplete: { age: 24 * 3600 },
+          removeOnFail: false,
+        };
+        try {
+          if (isImage) {
+            await req.server.queues.imageProcess.add('process', jobEnvelope, queueOpts);
+          } else {
+            await req.server.queues.videoTranscode.add('transcode', jobEnvelope, queueOpts);
+          }
+          const queuedAt = new Date();
+          await req.server.db
+            .update(processingJobs)
+            .set({ status: 'queued', queuedAt, updatedAt: queuedAt })
+            .where(eq(processingJobs.id, job.id));
+        } catch (queueErr) {
+          req.log.warn({ err: queueErr, jobId: job.id }, 'Failed to enqueue job — job remains in pending state');
+        }
+
+        // ── 7. Respond ─────────────────────────────────────────────────────
         return reply.code(201).send({
           id: asset.id,
           status: asset.status,

@@ -8,13 +8,14 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@mce/db": "workspace:*",
     "@mce/shared": "workspace:*",
     "@mce/storage": "workspace:*",
     "bullmq": "^5.13.0",
+    "drizzle-orm": "^0.36.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

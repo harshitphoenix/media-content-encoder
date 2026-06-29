@@ -53,6 +53,9 @@ importers:
       '@mce/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      bullmq:
+        specifier: ^5.13.0
+        version: 5.79.2
       drizzle-orm:
         specifier: ^0.36.0
         version: 0.36.4(postgres@3.4.9)
@@ -102,6 +105,9 @@ importers:
       bullmq:
         specifier: ^5.13.0
         version: 5.79.2
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(postgres@3.4.9)
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -133,6 +139,9 @@ importers:
       bullmq:
         specifier: ^5.13.0
         version: 5.79.2
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(postgres@3.4.9)
       zod:
         specifier: ^3.23.0
         version: 3.25.76
