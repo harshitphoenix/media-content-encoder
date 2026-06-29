@@ -48,6 +48,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRY: z.string().default('7d'),
 
+  // Processing tools
+  FFPROBE_PATH: z.string().default('ffprobe'),
+
   // Logging
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });
