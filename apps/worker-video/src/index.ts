@@ -1,25 +1,50 @@
 import { Worker, type Job } from 'bullmq';
+import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { createDb, mediaAssets, processingJobs } from '@mce/db';
+import { StorageClient } from '@mce/storage';
 import { QUEUE_NAMES, type VideoTranscodeJobPayload } from '@mce/shared';
+import { transcodeVideoJob } from './processor.js';
 
-// ── Config from environment ────────────────────────────────────────────────────
+// ── Config ─────────────────────────────────────────────────────────────────────
 
-function requireEnv(name: string): string {
-  const val = process.env[name];
-  if (!val) {
-    console.error(`Required environment variable ${name} is missing`);
-    process.exit(1);
-  }
-  return val;
+const ConfigSchema = z.object({
+  REDIS_URL: z.string().url(),
+  DATABASE_URL: z.string().url(),
+  STORAGE_ENDPOINT: z.string().min(1),
+  STORAGE_REGION: z.string().min(1),
+  STORAGE_ACCESS_KEY_ID: z.string().min(1),
+  STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
+  STORAGE_BUCKET_ORIGINALS: z.string().min(1),
+  STORAGE_BUCKET_VARIANTS: z.string().min(1),
+  STORAGE_FORCE_PATH_STYLE: z.string().transform(v => v === 'true').default('false'),
+  CDN_BASE_URL: z.string().min(1),
+  CDN_URL_TTL_SECONDS: z.coerce.number().positive().default(3600),
+  FFMPEG_PATH: z.string().default('ffmpeg'),
+});
+
+const parsed = ConfigSchema.safeParse(process.env);
+if (!parsed.success) {
+  console.error('Worker config error:', parsed.error.flatten().fieldErrors);
+  process.exit(1);
 }
-
-const REDIS_URL = requireEnv('REDIS_URL');
-const DATABASE_URL = requireEnv('DATABASE_URL');
+const config = parsed.data;
 
 // ── Connections ────────────────────────────────────────────────────────────────
 
-const db = createDb(DATABASE_URL);
+const db = createDb(config.DATABASE_URL);
+
+const storage = new StorageClient({
+  endpoint: config.STORAGE_ENDPOINT,
+  region: config.STORAGE_REGION,
+  accessKeyId: config.STORAGE_ACCESS_KEY_ID,
+  secretAccessKey: config.STORAGE_SECRET_ACCESS_KEY,
+  bucketOriginals: config.STORAGE_BUCKET_ORIGINALS,
+  bucketVariants: config.STORAGE_BUCKET_VARIANTS,
+  cdnBaseUrl: config.CDN_BASE_URL,
+  cdnUrlTtlSeconds: config.CDN_URL_TTL_SECONDS,
+  forcePathStyle: config.STORAGE_FORCE_PATH_STYLE,
+});
 
 function parseRedisUrl(urlString: string) {
   const u = new URL(urlString);
@@ -32,12 +57,12 @@ function parseRedisUrl(urlString: string) {
   };
 }
 
-const connection = parseRedisUrl(REDIS_URL);
+const connection = parseRedisUrl(config.REDIS_URL);
 
 // ── Job processor ──────────────────────────────────────────────────────────────
 
 async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void> {
-  const { assetId, storageKey, mimeType } = job.data;
+  const { assetId } = job.data;
   const now = new Date();
 
   console.info({ jobId: job.id, assetId, attempt: job.attemptsMade + 1 }, 'Video transcode job started');
@@ -45,12 +70,7 @@ async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void>
   // Transition: → PROCESSING
   await db
     .update(processingJobs)
-    .set({
-      status: 'processing',
-      startedAt: now,
-      attempts: job.attemptsMade + 1,
-      updatedAt: now,
-    })
+    .set({ status: 'processing', startedAt: now, attempts: job.attemptsMade + 1, updatedAt: now })
     .where(eq(processingJobs.id, job.id!));
 
   await db
@@ -58,15 +78,8 @@ async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void>
     .set({ status: 'processing', updatedAt: now })
     .where(eq(mediaAssets.id, assetId));
 
-  // TODO (Phase 4): implement video transcoding pipeline
-  // - Download original from storage (storageKey)
-  // - Generate renditions: 240p, 360p, 480p, 720p, 1080p using ffmpeg
-  // - Apply H.264 + AAC codec settings with bitrate ladder
-  // - Upload renditions to storage
-  // - Insert mediaVariants rows in DB
-  // - Enqueue thumbnail_generate + manifest_generate jobs (Phase 5)
-  void storageKey;
-  void mimeType;
+  // Run the full ffmpeg transcoding pipeline
+  await transcodeVideoJob({ id: job.id!, data: job.data }, db, storage, config.FFMPEG_PATH);
 
   // Transition: → COMPLETED
   const completedAt = new Date();
@@ -88,10 +101,7 @@ async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void>
 const worker = new Worker<VideoTranscodeJobPayload>(
   QUEUE_NAMES.VIDEO_TRANSCODE,
   transcodeVideo,
-  {
-    connection,
-    concurrency: 2, // video transcoding is CPU-intensive
-  },
+  { connection, concurrency: 2 },
 );
 
 worker.on('completed', (job) => {
