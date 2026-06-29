@@ -62,7 +62,10 @@ export async function processImageJob(
 
       // Upload can proceed concurrently across variants
       uploadPromises.push(
-        storage.upload(storage.bucketVariants, key, data, { contentType: mimeType }),
+        storage.upload(storage.bucketVariants, key, data, {
+          contentType: mimeType,
+          cacheControl: 'public, max-age=31536000, immutable',
+        }),
       );
 
       variantRecords.push({

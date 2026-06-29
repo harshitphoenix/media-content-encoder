@@ -47,6 +47,7 @@ export async function generateThumbnails(
     const coverKey = thumbnailKey({ assetId, thumbnailType: 'cover', index: 0 });
     await storage.upload(storage.bucketVariants, coverKey, createReadStream(coverFile), {
       contentType: 'image/jpeg',
+      cacheControl: 'public, max-age=31536000, immutable',
     });
     rows.push({
       assetId,
@@ -65,6 +66,7 @@ export async function generateThumbnails(
       const key = thumbnailKey({ assetId, thumbnailType: 'preview', index: i });
       await storage.upload(storage.bucketVariants, key, createReadStream(previewFile), {
         contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000, immutable',
       });
       rows.push({
         assetId,
@@ -95,6 +97,7 @@ export async function generateThumbnails(
       const key = thumbnailKey({ assetId, thumbnailType: 'timeline', index: i });
       await storage.upload(storage.bucketVariants, key, createReadStream(framePath), {
         contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000, immutable',
       });
       rows.push({
         assetId,

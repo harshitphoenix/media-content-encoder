@@ -21,6 +21,7 @@ const storagePlugin: FastifyPluginAsync = fp(async (app) => {
     cdnBaseUrl: cfg.CDN_BASE_URL,
     cdnUrlTtlSeconds: cfg.CDN_URL_TTL_SECONDS,
     forcePathStyle: cfg.STORAGE_FORCE_PATH_STYLE,
+    useSignedUrls: cfg.SIGNED_URLS,
   });
 
   app.decorate('storage', storage);

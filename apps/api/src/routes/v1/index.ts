@@ -5,6 +5,7 @@ import statusRoute from './media/status.js';
 import variantsRoute from './media/variants.js';
 import manifestsRoute from './media/manifests.js';
 import thumbnailsRoute from './media/thumbnails-route.js';
+import accessRoute from './media/access.js';
 import metricsRoute from './metrics.js';
 
 const v1Routes: FastifyPluginAsync = async (app) => {
@@ -14,6 +15,7 @@ const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(variantsRoute, { prefix: '/media' });
   await app.register(manifestsRoute, { prefix: '/media' });
   await app.register(thumbnailsRoute, { prefix: '/media' });
+  await app.register(accessRoute, { prefix: '/media' });
   await app.register(metricsRoute);
 };
 

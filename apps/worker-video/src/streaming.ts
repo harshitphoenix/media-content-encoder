@@ -98,11 +98,12 @@ export async function generateHlsManifest(
       allFiles.map(async (filename) => {
         const filePath = join(hlsWorkDir, filename);
         const storageKey = `manifests/${assetId}/hls/${filename}`;
-        const contentType = filename.endsWith('.m3u8')
-          ? 'application/vnd.apple.mpegurl'
-          : 'video/mp2t';
+        const isPlaylist = filename.endsWith('.m3u8');
         await storage.upload(storage.bucketVariants, storageKey, createReadStream(filePath), {
-          contentType,
+          contentType: isPlaylist ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+          cacheControl: isPlaylist
+            ? 'public, max-age=30'                    // playlists may be regenerated
+            : 'public, max-age=31536000, immutable',  // segments are content-addressed
         });
       }),
     );
@@ -221,11 +222,12 @@ export async function generateDashManifest(
       allFiles.map(async (filename) => {
         const filePath = join(dashWorkDir, filename);
         const storageKey = `manifests/${assetId}/dash/${filename}`;
-        const contentType = filename.endsWith('.mpd')
-          ? 'application/dash+xml'
-          : 'video/iso.segment';
+        const isManifest = filename.endsWith('.mpd');
         await storage.upload(storage.bucketVariants, storageKey, createReadStream(filePath), {
-          contentType,
+          contentType: isManifest ? 'application/dash+xml' : 'video/iso.segment',
+          cacheControl: isManifest
+            ? 'public, max-age=30'
+            : 'public, max-age=31536000, immutable',
         });
       }),
     );

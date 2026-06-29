@@ -114,6 +114,7 @@ export async function transcodeVideoJob(
       const key = variantKey({ assetId, variantType: spec.variantType, format: 'mp4' });
       await storage.upload(storage.bucketVariants, key, createReadStream(outputPath), {
         contentType: 'video/mp4',
+        cacheControl: 'public, max-age=31536000, immutable',
       });
 
       variantRecords.push({

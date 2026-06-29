@@ -42,6 +42,7 @@ export async function extractAudio(
 
     await storage.upload(storage.bucketVariants, key, createReadStream(outputPath), {
       contentType: 'audio/mpeg',
+      cacheControl: 'public, max-age=31536000, immutable',
     });
 
     await db.insert(mediaVariants).values({

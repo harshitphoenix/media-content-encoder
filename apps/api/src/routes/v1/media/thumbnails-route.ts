@@ -29,7 +29,7 @@ const thumbnailsRoute: FastifyPluginAsync = async (app) => {
         const entry = {
           id: t.id,
           storageKey: t.storageKey,
-          url: t.cdnUrl ?? app.storage.cdnUrl(t.storageKey),
+          url: await app.storage.deliveryUrl(app.storage.bucketVariants, t.storageKey),
           width: t.width,
           height: t.height,
           timestampSeconds: t.timestampSeconds,

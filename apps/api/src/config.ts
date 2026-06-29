@@ -28,6 +28,11 @@ const envSchema = z.object({
   // CDN
   CDN_BASE_URL: z.string().url(),
   CDN_URL_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  // When true, variant APIs return presigned S3 URLs instead of plain CDN URLs
+  SIGNED_URLS: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
 
   // File limits
   MAX_IMAGE_SIZE_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),

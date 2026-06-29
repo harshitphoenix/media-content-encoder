@@ -25,17 +25,19 @@ const variantsRoute: FastifyPluginAsync = async (app) => {
         .where(eq(mediaVariants.assetId, id))
         .orderBy(asc(mediaVariants.variantType), asc(mediaVariants.format));
 
-      const variants = rows.map(v => ({
-        id: v.id,
-        variantType: v.variantType,
-        format: v.format,
-        width: v.width,
-        height: v.height,
-        sizeBytes: Number(v.sizeBytes),
-        storageKey: v.storageKey,
-        url: app.storage.cdnUrl(v.storageKey),
-        createdAt: v.createdAt.toISOString(),
-      }));
+      const variants = await Promise.all(
+        rows.map(async (v) => ({
+          id: v.id,
+          variantType: v.variantType,
+          format: v.format,
+          width: v.width,
+          height: v.height,
+          sizeBytes: Number(v.sizeBytes),
+          storageKey: v.storageKey,
+          url: await app.storage.deliveryUrl(app.storage.bucketVariants, v.storageKey),
+          createdAt: v.createdAt.toISOString(),
+        })),
+      );
 
       return reply.send({
         assetId: id,

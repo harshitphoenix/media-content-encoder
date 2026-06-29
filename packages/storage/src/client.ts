@@ -21,11 +21,23 @@ export interface StorageConfig {
   cdnUrlTtlSeconds: number;
   /** Set true when using MinIO or other self-hosted S3-compatible stores */
   forcePathStyle: boolean;
+  /**
+   * When true, deliveryUrl() generates presigned S3 URLs instead of plain CDN URLs.
+   * Use for private buckets. HLS/DASH manifests always use cdnUrl() regardless,
+   * since presigned URLs break relative segment resolution.
+   */
+  useSignedUrls?: boolean;
 }
 
 export interface UploadOptions {
   contentType: string;
   metadata?: Record<string, string>;
+  /**
+   * Cache-Control header value for the stored object.
+   * Immutable processed variants: 'public, max-age=31536000, immutable'
+   * Short-lived manifests:        'public, max-age=30'
+   */
+  cacheControl?: string;
 }
 
 export class StorageClient {
@@ -34,6 +46,7 @@ export class StorageClient {
   readonly bucketVariants: string;
   private readonly cdnBaseUrl: string;
   private readonly cdnUrlTtlSeconds: number;
+  private readonly useSignedUrls: boolean;
 
   constructor(private readonly config: StorageConfig) {
     this.s3 = new S3Client({
@@ -49,6 +62,7 @@ export class StorageClient {
     this.bucketVariants = config.bucketVariants;
     this.cdnBaseUrl = config.cdnBaseUrl.replace(/\/$/, '');
     this.cdnUrlTtlSeconds = config.cdnUrlTtlSeconds;
+    this.useSignedUrls = config.useSignedUrls ?? false;
   }
 
   /** Upload an object from a Buffer or Readable stream. */
@@ -64,6 +78,7 @@ export class StorageClient {
       Body: body,
       ContentType: opts.contentType,
       Metadata: opts.metadata,
+      ...(opts.cacheControl !== undefined ? { CacheControl: opts.cacheControl } : {}),
     };
     await this.s3.send(new PutObjectCommand(input));
   }
@@ -124,6 +139,20 @@ export class StorageClient {
    */
   cdnUrl(key: string): string {
     return `${this.cdnBaseUrl}/${key}`;
+  }
+
+  /**
+   * Generate a delivery URL for a processed asset.
+   * Returns a presigned S3 URL when `useSignedUrls` is true, otherwise a plain CDN URL.
+   *
+   * NOT suitable for HLS/DASH manifests — use cdnUrl() for those, since presigned
+   * URLs break relative segment resolution in media players.
+   */
+  async deliveryUrl(bucket: string, key: string, ttlSeconds?: number): Promise<string> {
+    if (this.useSignedUrls) {
+      return this.signedUrl(bucket, key, ttlSeconds);
+    }
+    return this.cdnUrl(key);
   }
 }
 
