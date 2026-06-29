@@ -3,6 +3,8 @@ import uploadRoute from './media/upload.js';
 import getRoute from './media/get.js';
 import statusRoute from './media/status.js';
 import variantsRoute from './media/variants.js';
+import manifestsRoute from './media/manifests.js';
+import thumbnailsRoute from './media/thumbnails-route.js';
 import metricsRoute from './metrics.js';
 
 const v1Routes: FastifyPluginAsync = async (app) => {
@@ -10,6 +12,8 @@ const v1Routes: FastifyPluginAsync = async (app) => {
   await app.register(getRoute, { prefix: '/media' });
   await app.register(statusRoute, { prefix: '/media' });
   await app.register(variantsRoute, { prefix: '/media' });
+  await app.register(manifestsRoute, { prefix: '/media' });
+  await app.register(thumbnailsRoute, { prefix: '/media' });
   await app.register(metricsRoute);
 };
 

@@ -1,10 +1,13 @@
 import { Worker, type Job } from 'bullmq';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { createDb, mediaAssets, processingJobs } from '@mce/db';
+import { createDb, mediaAssets, processingJobs, videoMetadata } from '@mce/db';
 import { StorageClient } from '@mce/storage';
 import { QUEUE_NAMES, type VideoTranscodeJobPayload } from '@mce/shared';
 import { transcodeVideoJob } from './processor.js';
+import { generateThumbnails } from './thumbnails.js';
+import { generateHlsManifest, generateDashManifest } from './streaming.js';
+import { extractAudio } from './audio.js';
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -59,10 +62,20 @@ function parseRedisUrl(urlString: string) {
 
 const connection = parseRedisUrl(config.REDIS_URL);
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+async function tryBestEffort(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error({ err, step: label }, `Phase 5 step "${label}" failed — continuing`);
+  }
+}
+
 // ── Job processor ──────────────────────────────────────────────────────────────
 
 async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void> {
-  const { assetId } = job.data;
+  const { assetId, storageKey } = job.data;
   const now = new Date();
 
   console.info({ jobId: job.id, assetId, attempt: job.attemptsMade + 1 }, 'Video transcode job started');
@@ -78,8 +91,48 @@ async function transcodeVideo(job: Job<VideoTranscodeJobPayload>): Promise<void>
     .set({ status: 'processing', updatedAt: now })
     .where(eq(mediaAssets.id, assetId));
 
-  // Run the full ffmpeg transcoding pipeline
+  // Phase 4: Run the full ffmpeg transcoding pipeline (critical — errors propagate)
   await transcodeVideoJob({ id: job.id!, data: job.data }, db, storage, config.FFMPEG_PATH);
+
+  // Phase 5: Post-processing (best-effort — errors are logged but do not fail the job)
+  const vidMeta = await db.query.videoMetadata.findFirst({
+    where: eq(videoMetadata.assetId, assetId),
+    columns: { durationSeconds: true, width: true, height: true },
+  });
+
+  if (vidMeta) {
+    await tryBestEffort('thumbnails', () =>
+      generateThumbnails(
+        {
+          assetId,
+          originalStorageKey: storageKey,
+          durationSeconds: vidMeta.durationSeconds,
+          srcWidth: vidMeta.width,
+          srcHeight: vidMeta.height,
+          ffmpegPath: config.FFMPEG_PATH,
+        },
+        db,
+        storage,
+      ),
+    );
+  }
+
+  await tryBestEffort('hls', () =>
+    generateHlsManifest({ assetId }, db, storage, config.FFMPEG_PATH),
+  );
+
+  await tryBestEffort('dash', () =>
+    generateDashManifest({ assetId }, db, storage, config.FFMPEG_PATH),
+  );
+
+  await tryBestEffort('audio', () =>
+    extractAudio(
+      { assetId, jobId: job.id!, originalStorageKey: storageKey },
+      db,
+      storage,
+      config.FFMPEG_PATH,
+    ),
+  );
 
   // Transition: → COMPLETED
   const completedAt = new Date();
