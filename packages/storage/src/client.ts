@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   type PutObjectCommandInput,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -120,6 +121,31 @@ export class StorageClient {
         ),
       ),
     );
+  }
+
+  /**
+   * List all object keys under a given prefix (paginates automatically).
+   * Useful for finding HLS/DASH segment files that are not individually tracked in DB.
+   */
+  async listObjects(bucket: string, prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const res = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          ...(continuationToken !== undefined ? { ContinuationToken: continuationToken } : {}),
+        }),
+      );
+      for (const obj of res.Contents ?? []) {
+        if (obj.Key) keys.push(obj.Key);
+      }
+      continuationToken = res.NextContinuationToken;
+    } while (continuationToken !== undefined);
+
+    return keys;
   }
 
   /**

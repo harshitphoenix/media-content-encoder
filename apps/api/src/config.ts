@@ -52,6 +52,8 @@ const envSchema = z.object({
   // Auth
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRY: z.string().default('7d'),
+  // Admin API key — must be at least 32 chars; keep secret; never commit the real value
+  ADMIN_API_KEY: z.string().min(32),
 
   // Processing tools
   FFPROBE_PATH: z.string().default('ffprobe'),
