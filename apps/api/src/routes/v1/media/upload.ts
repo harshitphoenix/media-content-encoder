@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import type { FastifyPluginAsync } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { mediaAssets, imageMetadata, videoMetadata, processingJobs } from '@mce/db';
-import { isImageMimeType, JOB_TYPE } from '@mce/shared';
+import { isImageMimeType, JOB_TYPE, UploadQuerySchema, type CropParams } from '@mce/shared';
 import { originalKey } from '@mce/storage';
 import {
   detectFileType,
@@ -37,7 +37,6 @@ const uploadRoute: FastifyPluginAsync = async (app) => {
         const assetId = randomUUID();
         const isImage = isImageMimeType(mimeType);
 
-        // image/video metadata row values, built from probe results
         let imgMeta: {
           assetId: string; width: number; height: number; format: string;
           colorSpace: string | null; hasAlpha: boolean;
@@ -50,6 +49,7 @@ const uploadRoute: FastifyPluginAsync = async (app) => {
         } | null = null;
 
         let metadataResponseBlock: Record<string, unknown>;
+        let crop: CropParams | undefined;
 
         if (isImage) {
           let probe;
@@ -64,6 +64,23 @@ const uploadRoute: FastifyPluginAsync = async (app) => {
           assertImageDimensions(probe.width, probe.height);
           imgMeta = { assetId, width: probe.width, height: probe.height, format: probe.format, colorSpace: probe.colorSpace, hasAlpha: probe.hasAlpha };
           metadataResponseBlock = { type: 'image', width: probe.width, height: probe.height, format: probe.format, colorSpace: probe.colorSpace, hasAlpha: probe.hasAlpha };
+
+          // Parse and validate optional crop params against actual image dimensions
+          const queryResult = UploadQuerySchema.safeParse(req.query);
+          if (!queryResult.success) {
+            return reply.code(400).send({ error: 'Invalid crop parameters: ' + queryResult.error.issues.map(i => i.message).join(', ') });
+          }
+          const { cropX, cropY, cropWidth, cropHeight } = queryResult.data;
+          if (cropX !== undefined || cropY !== undefined || cropWidth !== undefined || cropHeight !== undefined) {
+            const x = cropX ?? 0;
+            const y = cropY ?? 0;
+            const w = cropWidth ?? (probe.width - x);
+            const h = cropHeight ?? (probe.height - y);
+            if (x + w > probe.width || y + h > probe.height || w <= 0 || h <= 0) {
+              return reply.code(400).send({ error: `Crop region (${x},${y} ${w}×${h}) exceeds image dimensions ${probe.width}×${probe.height}` });
+            }
+            crop = { x, y, width: w, height: h };
+          }
         } else {
           let probe;
           try {
@@ -131,7 +148,7 @@ const uploadRoute: FastifyPluginAsync = async (app) => {
         });
 
         // ── 6. Enqueue job (best-effort — Redis failure doesn't abort upload) ─
-        const jobEnvelope = { jobId: job.id, assetId, storageKey, mimeType };
+        const jobEnvelope = { assetId, storageKey, mimeType, ...(crop ? { crop } : {}) };
         const queueOpts = {
           jobId: job.id, // idempotency: BullMQ deduplicates on waiting/active/delayed
           attempts: req.server.config.JOB_MAX_ATTEMPTS,

@@ -39,10 +39,20 @@ export interface ProcessingJob {
 
 // ─── Job Queue Payloads ──────────────────────────────────────────────────────
 
+/** Optional crop to apply before variant generation (all coordinates in pixels). */
+export interface CropParams {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface ImageProcessJobPayload {
   assetId: string;
   storageKey: string;
   mimeType: string;
+  /** If present, the source image is cropped to this region before any resize. */
+  crop?: CropParams;
 }
 
 export interface VideoTranscodeJobPayload {
