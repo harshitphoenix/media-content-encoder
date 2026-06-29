@@ -5,7 +5,15 @@ import { mediaAssets, thumbnailEntries } from '@mce/db';
 const thumbnailsRoute: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>(
     '/:id/thumbnails',
-    {},
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
     async (req, reply) => {
       const { id } = req.params;
 

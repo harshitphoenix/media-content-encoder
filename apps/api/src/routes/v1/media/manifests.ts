@@ -5,7 +5,15 @@ import { mediaAssets, streamingManifests } from '@mce/db';
 const manifestsRoute: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>(
     '/:id/manifests',
-    {},
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
     async (req, reply) => {
       const { id } = req.params;
 

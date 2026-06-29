@@ -14,7 +14,15 @@ import { mediaAssets, mediaVariants, streamingManifests, thumbnailEntries } from
 const accessRoute: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>(
     '/:id/access',
-    {},
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
     async (req, reply) => {
       const { id } = req.params;
 

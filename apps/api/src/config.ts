@@ -58,6 +58,10 @@ const envSchema = z.object({
   // Processing tools
   FFPROBE_PATH: z.string().default('ffprobe'),
 
+  // Rate limiting (per IP, per window)
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+
   // Logging
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });

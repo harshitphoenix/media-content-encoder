@@ -21,7 +21,15 @@ import {
 const uploadRoute: FastifyPluginAsync = async (app) => {
   app.post(
     '/',
-    {},
+    {
+      // Upload is expensive — tighter per-IP limit than the global default
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: 60_000,
+        },
+      },
+    },
     async (req, reply) => {
       const upload = await req.saveUpload();
 

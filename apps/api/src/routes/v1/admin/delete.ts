@@ -8,7 +8,18 @@ import {
 } from '@mce/db';
 
 const deleteRoute: FastifyPluginAsync = async (app) => {
-  app.delete<{ Params: { id: string } }>('/:id', {}, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>(
+    '/:id',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
+    async (req, reply) => {
     const { id } = req.params;
 
     const asset = await app.db.query.mediaAssets.findFirst({

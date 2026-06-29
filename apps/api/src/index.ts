@@ -1,10 +1,14 @@
 import Fastify from 'fastify';
+import addFormats from 'ajv-formats';
 import { loadConfig } from './config.js';
 import rootPlugin from './plugins/root.js';
+import redisPlugin from './plugins/redis.js';
 import dbPlugin from './plugins/db.js';
 import storagePlugin from './plugins/storage.js';
 import multipartPlugin from './plugins/multipart.js';
 import queuePlugin from './plugins/queue.js';
+import securityPlugin from './plugins/security.js';
+import rateLimiter from './plugins/rate-limit.js';
 import healthRoutes from './routes/health.js';
 import v1Routes from './routes/v1/index.js';
 
@@ -14,6 +18,11 @@ async function bootstrap() {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
+      // Redact auth headers from all log lines — CWE-532 (secrets in logs)
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers["x-admin-key"]'],
+        censor: '[REDACTED]',
+      },
       ...(config.NODE_ENV === 'development'
         ? {
             transport: {
@@ -29,15 +38,20 @@ async function bootstrap() {
         coerceTypes: 'array',
         useDefaults: true,
       },
+      // Enable UUID and other format validators (format: 'uuid' on route schemas is enforced)
+      plugins: [addFormats as never],
     },
   });
 
-  // ── Plugins ───────────────────────────────────────────────────────────────
+  // ── Plugins (order matters — later plugins can use earlier decorators) ──────
   await app.register(rootPlugin, { config });
+  await app.register(redisPlugin);      // decorates app.redis
   await app.register(dbPlugin);
   await app.register(storagePlugin);
   await app.register(multipartPlugin);
   await app.register(queuePlugin);
+  await app.register(securityPlugin);   // helmet headers + production error handler
+  await app.register(rateLimiter);      // per-IP rate limiting (global, Redis-backed)
 
   // ── Routes ────────────────────────────────────────────────────────────────
   await app.register(healthRoutes);

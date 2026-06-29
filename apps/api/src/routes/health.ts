@@ -82,6 +82,17 @@ const healthRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      // Redis check
+      try {
+        const pong = await app.redis.ping();
+        checks['redis'] = pong === 'PONG' ? 'ok' : 'error';
+        if (pong !== 'PONG') allOk = false;
+      } catch (err) {
+        checks['redis'] = 'error';
+        allOk = false;
+        app.log.error({ err }, 'Redis readiness check failed');
+      }
+
       const status = allOk ? 200 : 503;
       return reply.code(status).send({ status: allOk ? 'ok' : 'degraded', checks });
     },

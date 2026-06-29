@@ -12,7 +12,18 @@ import { isImageMimeType, JOB_TYPE, QUEUE_NAMES } from '@mce/shared';
 const IN_FLIGHT_STATUSES = new Set(['queued', 'processing']);
 
 const reprocessRoute: FastifyPluginAsync = async (app) => {
-  app.post<{ Params: { id: string } }>('/:id/reprocess', {}, async (req, reply) => {
+  app.post<{ Params: { id: string } }>(
+    '/:id/reprocess',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
+    async (req, reply) => {
     const { id } = req.params;
 
     const asset = await app.db.query.mediaAssets.findFirst({

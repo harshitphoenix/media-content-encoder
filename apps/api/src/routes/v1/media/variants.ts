@@ -5,7 +5,15 @@ import { mediaAssets, mediaVariants } from '@mce/db';
 const variantsRoute: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>(
     '/:id/variants',
-    {},
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+    },
     async (req, reply) => {
       const { id } = req.params;
 
