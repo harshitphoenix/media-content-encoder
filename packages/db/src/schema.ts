@@ -68,13 +68,30 @@ export const manifestTypeEnum = pgEnum('manifest_type', ['hls', 'dash']);
 
 export const thumbnailTypeEnum = pgEnum('thumbnail_type', ['cover', 'preview', 'timeline']);
 
+// ─── users ────────────────────────────────────────────────────────────────────
+
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: varchar('email', { length: 256 }).notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    emailIdx: index('idx_users_email').on(t.email),
+  }),
+);
+
 // ─── media_assets ─────────────────────────────────────────────────────────────
 
 export const mediaAssets = pgTable(
   'media_assets',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    ownerId: uuid('owner_id'),
+    // FK to users — nullable so assets can exist before auth was introduced
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
     mimeType: varchar('mime_type', { length: 100 }).notNull(),
     originalFilename: varchar('original_filename', { length: 512 }).notNull(),
     // bigint stored as string in drizzle for precision; cast at app layer
@@ -245,7 +262,12 @@ export const thumbnailEntries = pgTable(
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
+export const userRelations = relations(users, ({ many }) => ({
+  mediaAssets: many(mediaAssets),
+}));
+
 export const mediaAssetRelations = relations(mediaAssets, ({ one, many }) => ({
+  owner: one(users, { fields: [mediaAssets.ownerId], references: [users.id] }),
   imageMetadata: one(imageMetadata, { fields: [mediaAssets.id], references: [imageMetadata.assetId] }),
   videoMetadata: one(videoMetadata, { fields: [mediaAssets.id], references: [videoMetadata.assetId] }),
   processingJobs: many(processingJobs),
